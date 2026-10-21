@@ -1,0 +1,37 @@
+{
+  "baseUrl": "http://localhost:8080",
+  "kind": "observed",
+  "mockedRequests": 0,
+  "checks": [
+    "Four independent role sessions; admin has no fabricated metrics",
+    "UI chat -> real Backend/DB -> SSE -> non-author and operator",
+    "Context candidate is HELD and absent from non-author DOM",
+    "Actual Agent task, Business MCP, RAG and model produce a human review",
+    "DEFER keeps same review and message HELD",
+    "Stored human decision -> same thread resume -> Backend apply -> SSE public restoration",
+    "Human violation -> actual HIDDEN/TIMEOUT -> 403 TIMED_OUT with until; observer remains isolated",
+    "Three distinct confirmed cases -> separate human KICK approval -> real MCP execution -> target SSE disconnect",
+    "Human finding revocation -> real PUBLIC recovery and timeout removal -> new send accepted",
+    "FLOOD burst keeps first two PUBLIC; third and fourth share confirmed hidden handling",
+    "Same-cookie account switch clears old operator cards and private chat state"
+  ],
+  "screenshots": [
+    "operator-ai-review.png",
+    "observer-held-isolated.png",
+    "author-held.png",
+    "operator-decision-applied.png",
+    "observer-public-restored.png",
+    "admin-no-mock.png",
+    "operator-violation-confirmed.png",
+    "author-hidden-timeout.png",
+    "operator-separate-kick-approval.png",
+    "author-kicked-until-live-end.png",
+    "operator-finding-revoked.png",
+    "observer-recovery-public.png",
+    "operator-flood-third-fourth-hidden.png",
+    "same-cookie-viewer-cleared-operator-state.png"
+  ],
+  "errors": [],
+  "reviewId": "fa4b57fb-7b16-4d25-8fd7-8d3c21124aff",
+  "status": "PASS"
+}

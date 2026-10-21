@@ -22,7 +22,7 @@ services:
 
   backend:
     build:
-      context: ../liveguard-be
+      context: ${BACKEND_BUILD_CONTEXT:-../liveguard-be}
       dockerfile: Dockerfile
 
     restart: unless-stopped
@@ -33,9 +33,19 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Set INTERNAL_SERVICE_TOKEN in .env}
+      LIVEGUARD_POLICY_VERSION: ${LIVEGUARD_POLICY_VERSION:-}
+      LIVEGUARD_TBD_FIXTURE_ENABLED: ${LIVEGUARD_TBD_FIXTURE_ENABLED:-false}
+      AGENT_DELIVERY_ENABLED: ${AGENT_DELIVERY_ENABLED:-false}
+      AGENT_DELIVERY_TRANSPORT: ${AGENT_DELIVERY_TRANSPORT:-db}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_USER: ${RABBITMQ_USER:-liveguard}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-}
+      AGENT_BASE_URL: http://agent:8001
+      AGENT_SERVICE_TOKEN: ${AGENT_SERVICE_TOKEN:?Set AGENT_SERVICE_TOKEN in .env}
 
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
 
     depends_on:
       db:
@@ -43,13 +53,18 @@ services:
 
   agent:
     build:
-      context: ../liveguard-agent
+      context: ${AGENT_BUILD_CONTEXT:-../liveguard-agent}
       dockerfile: Dockerfile
 
     restart: unless-stopped
 
     environment:
       BACKEND_BASE_URL: http://backend:8080
+      BACKEND_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Set INTERNAL_SERVICE_TOKEN}
+      AGENT_GATEWAY_FACTORY: ${AGENT_GATEWAY_FACTORY:-}
+      MODEL_PROVIDER: ${MODEL_PROVIDER:-openai}
+      MODEL_NAME: ${MODEL_NAME:-}
+      MODEL_API_KEY: ${LIVEGUARD_OPENAI_API_KEY:-}
       BUSINESS_MCP_URL: http://business-mcp:8002/mcp
       RAG_MCP_URL: http://rag-mcp:8003/mcp
       BUSINESS_MCP_AGENT_TOKEN: ${BUSINESS_MCP_AGENT_TOKEN:?Set BUSINESS_MCP_AGENT_TOKEN in .env}
@@ -62,7 +77,7 @@ services:
       - liveguard_agent_tasks:/var/lib/liveguard-agent
 
     ports:
-      - "127.0.0.1:8001:8001"
+      - "127.0.0.1:${AGENT_PORT:-8001}:8001"
 
     depends_on:
       backend:
@@ -74,7 +89,7 @@ services:
 
   business-mcp:
     build:
-      context: ../liveguard-agent
+      context: ${AGENT_BUILD_CONTEXT:-../liveguard-agent}
       dockerfile: Dockerfile
 
     command: ["python", "-m", "app.business_mcp"]
@@ -89,8 +104,6 @@ services:
       BUSINESS_MCP_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Set INTERNAL_SERVICE_TOKEN in .env}
       BUSINESS_MCP_AGENT_TOKEN: ${BUSINESS_MCP_AGENT_TOKEN:?Set BUSINESS_MCP_AGENT_TOKEN in .env}
 
-    ports:
-      - "127.0.0.1:8002:8002"
 
     depends_on:
       backend:
@@ -98,7 +111,7 @@ services:
 
   rag-mcp:
     build:
-      context: ../liveguard-agent
+      context: ${AGENT_BUILD_CONTEXT:-../liveguard-agent}
       dockerfile: Dockerfile
 
     command: ["python", "-m", "app.rag_mcp"]
@@ -110,17 +123,46 @@ services:
       RAG_MCP_PORT: "8003"
       RAG_MCP_ALLOWED_HOSTS: "127.0.0.1:*,localhost:*,rag-mcp:*"
       RAG_DB_URL: ${RAG_DB_URL:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_API_KEY: ${LIVEGUARD_OPENAI_API_KEY:-}
       RAG_MCP_AGENT_TOKEN: ${RAG_MCP_AGENT_TOKEN:?Set RAG_MCP_AGENT_TOKEN in .env}
       EMBEDDING_MODEL: text-embedding-3-small
+      LIVEGUARD_POLICY_VERSION: ${LIVEGUARD_POLICY_VERSION:-}
 
-    ports:
-      - "127.0.0.1:8003:8003"
 
     depends_on:
       db:
         condition: service_healthy
 
+  rabbitmq:
+    image: rabbitmq:4.1-alpine
+    profiles: ["rabbit"]
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-liveguard}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-}
+    volumes:
+      - liveguard_rabbitmq:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  frontend:
+    build:
+      context: ${FRONTEND_BUILD_CONTEXT:-../liveguard-fe}
+      args:
+        VITE_USE_API: "true"
+        VITE_USE_LIVE_V1: ${LIVEGUARD_V1_UI:-false}
+    environment:
+      BACKEND_URL: http://backend:8080
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:8080"
+    depends_on:
+      backend:
+        condition: service_started
+
 volumes:
   liveguard_db:
   liveguard_agent_tasks:
+  liveguard_rabbitmq:

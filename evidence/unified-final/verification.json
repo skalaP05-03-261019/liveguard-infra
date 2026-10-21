@@ -1,0 +1,55 @@
+{
+  "kind": "observed-and-controlled-distinguished",
+  "date": "2026-10-21",
+  "backend": {
+    "source": "4e68ba5b19ec9572fe7a1f4cc7b38bf2bb890c2c",
+    "mergedPR": 39,
+    "tests": {
+      "tests": 457,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "agent": {
+    "source": "cbc776c1e9443fc19198bb5e0ab862f9a33b9ff4",
+    "mergedPRs": [
+      51,
+      53
+    ],
+    "unittest": {
+      "ran": 254,
+      "skipped": 1,
+      "failures": 0
+    },
+    "githubCI": [
+      "ASGI success",
+      "TCP success"
+    ]
+  },
+  "frontend": {
+    "source": "79da66b01cb0dd222633909f439cd0cad7716f4b",
+    "mergedPR": 3,
+    "build": "vue-tsc + Vite success"
+  },
+  "runtime": {
+    "project": "liveguard-unified",
+    "services": 7,
+    "transport": "rabbit",
+    "policyVersion": "v3.1",
+    "indexedSections": 29,
+    "fixture": true,
+    "url": "http://localhost:3003",
+    "database": "fresh isolated liveguard_final; prior DBs preserved"
+  },
+  "reviews": {
+    "standards": "parallel reviewer; discovered issues fixed",
+    "spec": "parallel reviewer; execution authority recheck fixed"
+  },
+  "limits": [
+    "TBD policy fixture does not constitute team production approval",
+    "PII verified facts remain UNKNOWN",
+    "No claim of all ERD or all PROJECT AC production completion",
+    "Prior #34/#35-only DB migration checksum requires separately reviewed migration; no automatic repair"
+  ]
+}

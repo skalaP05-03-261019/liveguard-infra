@@ -1,3 +1,7 @@
+> 최신(2026-10-21): [7서비스·실제 AI·사람 승인·오판 복구 검증](docs/v1-integration.md)을 우선 참조하세요. 아래 5서비스/이전 미연동 설명은 당시 기록입니다. 현재 기본값은 미정 정책 fixture와 통합 화면을 자동 활성화하지 않습니다.
+
+> 2026-10-21 후속: 실제 liveId 통합은 [시험 실행·검증 기록](docs/v1-integration.md)을 우선 참조하세요. 아래 앞선 5서비스 검증 기록은 당시 범위이며 전체 Agent 미연동이라는 문장은 후속 시험 설정에 적용되지 않습니다. 기본 구성은 여전히 Gateway·Outbox·새 화면·미정 정책 시험을 자동 활성화하지 않습니다.
+
 # LIVE:GUARD Infra
 
 LIVE:GUARD 프로젝트의 로컬 Docker 개발 환경을 관리하는 저장소입니다.
@@ -63,7 +67,7 @@ projects/
 └── liveguard-fe/
 ```
 
-현재 기본 Compose 구성에는 Frontend가 포함되지 않습니다.
+기본 Compose 구성에 Frontend가 포함되며 localhost:3000에서 접속합니다. 기존 5서비스 설정과 볼륨은 보존합니다.
 
 Backend와 Agent 이미지는 각각 `../liveguard-be`, `../liveguard-agent`의 Dockerfile을 사용해 빌드합니다.
 
@@ -92,7 +96,7 @@ cp .env.example .env
 | `RAG_MCP_AGENT_TOKEN`      | Agent에서 RAG MCP 접근                        |
 | `AGENT_SERVICE_TOKEN`      | Agent 작업 API 접근 인증                      |
 | `RAG_DB_URL`               | RAG 정책 저장용 PostgreSQL 연결 주소          |
-| `OPENAI_API_KEY`           | 정책 임베딩 및 검색                           |
+| `LIVEGUARD_OPENAI_API_KEY` | 모델 호출 및 정책 임베딩                           |
 | `AGENT_CHECKPOINT_DB_URL`  | LangGraph Checkpointer용 PostgreSQL 연결 주소 |
 
 인증 토큰은 서로 구분해 설정하며, 다음 명령어로 생성할 수 있습니다.

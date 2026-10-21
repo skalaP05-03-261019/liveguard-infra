@@ -1,0 +1,30 @@
+{
+  "baseUrl": "http://localhost:8080",
+  "kind": "observed",
+  "mockedRequests": 0,
+  "checks": [
+    "Four independent role sessions; admin has no fabricated metrics",
+    "UI chat -> real Backend/DB -> SSE -> non-author and operator",
+    "Context candidate is HELD and absent from non-author DOM",
+    "Actual Agent task, Business MCP, RAG and model produce a human review",
+    "DEFER keeps same review and message HELD",
+    "Stored human decision -> same thread resume -> Backend apply -> SSE public restoration",
+    "Human violation -> actual HIDDEN/TIMEOUT -> 403 TIMED_OUT with until; observer remains isolated",
+    "Three distinct confirmed cases -> separate human KICK approval -> real MCP execution -> target SSE disconnect"
+  ],
+  "screenshots": [
+    "operator-ai-review.png",
+    "observer-held-isolated.png",
+    "author-held.png",
+    "operator-decision-applied.png",
+    "observer-public-restored.png",
+    "admin-no-mock.png",
+    "operator-violation-confirmed.png",
+    "author-hidden-timeout.png",
+    "operator-separate-kick-approval.png",
+    "author-kicked-until-live-end.png"
+  ],
+  "errors": [],
+  "reviewId": "e713a04c-259e-4d3d-badd-7856c3e38a71",
+  "status": "PASS"
+}

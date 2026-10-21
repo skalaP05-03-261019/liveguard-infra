@@ -1,0 +1,34 @@
+{
+  "checks": [
+    "frontend serves API build",
+    "nginx forwards session API",
+    "BE rejects missing service token",
+    "Agent authenticates and fails closed without gateway",
+    "business-mcp real MCP handshake and tools/list; anonymous blocked",
+    "rag-mcp real MCP handshake and tools/list; anonymous blocked",
+    "Agent SDK → Business MCP → real BE context query (absent case NOT_FOUND)",
+    "dedicated BE routes return their real NOT_IMPLEMENTED/NOT_FOUND errors instead of obsolete view= 400"
+  ],
+  "blockers": [
+    {
+      "path": "GET /internal/cases/{id}",
+      "status": 501
+    },
+    {
+      "service": "agent",
+      "health": {
+        "status": "not_ready",
+        "readyForTasks": false
+      }
+    },
+    {
+      "service": "rag-mcp",
+      "health": {
+        "status": "not_configured",
+        "readyForTasks": false,
+        "indexedPolicyVersions": []
+      }
+    }
+  ],
+  "status": "PASS_WITH_BACKEND_BLOCKERS"
+}

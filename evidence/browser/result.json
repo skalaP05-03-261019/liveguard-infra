@@ -1,0 +1,27 @@
+{
+  "baseUrl": "http://localhost:8080",
+  "mockedRequests": 0,
+  "checks": [
+    "browser login, session cookie and CSRF-protected login",
+    "message POST without CSRF is rejected (403)",
+    "independent operator and non-author viewer sessions",
+    "UI send → real DB → SSE → other viewer and operator UI",
+    "message persists across browser reload",
+    "HELD/HIDDEN text available to operator, absent from non-author history and UI",
+    "raw non-author SSE stream excludes hidden original through subsequent public event",
+    "admin login uses real Backend role",
+    "logout invalidates server session"
+  ],
+  "blockers": [
+    {
+      "path": "/api/cases",
+      "status": 404,
+      "impact": "Case/review/Agent E2E is not implemented by current Backend"
+    },
+    {
+      "path": "SystemPage",
+      "impact": "Aggregate dashboard still uses systemMock"
+    }
+  ],
+  "status": "PASS_WITH_BACKEND_BLOCKERS"
+}
