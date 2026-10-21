@@ -8,7 +8,7 @@ Agent·Business MCP·RAG MCP도 같은 Docker 네트워크에서 실행합니다
 
 | 저장소 | 검증 기준 |
 | --- | --- |
-| liveguard-be | main `13bf972ddd2103ba29966b7ba27f8d0f6c401b7c` |
+| liveguard-be | main `45962f274cf250c60c668ab5b6f4f4ba1e075568` (검증 도중 PR #16 병합분을 추가 반영) |
 | liveguard-fe | main `1a29dd6ea144ef9b4ba0f02d5e31ae400b296ce3` |
 | liveguard-agent | [PR #32](https://github.com/skalaP05-03-261019/liveguard-agent/pull/32), `5f304d4` on `fix/business-mcp-compose-host`; runtime [PR #27](https://github.com/skalaP05-03-261019/liveguard-agent/pull/27) 위에 쌓음 |
 | liveguard-infra | main/default `d2d350d1929810abfc6d9bfc7dc213f7f61f6679` + this branch |
@@ -90,3 +90,5 @@ docker run --rm --network liveguard-connected_default -e PYTHONPATH=/app \
 ## 정책 충돌 보존
 
 Frontend 문서/Mock과 BE의 일부 기존 문서는 24시간 강퇴·자동 문맥 판정 중심의 이전 기준을 담고 있습니다. 사용자 확인 최신 기준은 같은 liveId에서 24시간 동안 확정 사건 3건을 집계하되, KICK 효력은 해당 live 종료까지이며 CONTEXT의 모든 모델 판단은 사람 검토를 거칩니다. 연결 작업에서 이 충돌을 임의로 해소하거나 기존 동작을 조용히 변경하지 않았습니다. BE 계약과 실제 정책 확정, FE 문구/버튼/이벤트 정렬이 후속 E2E의 전제입니다. FLOOD 최초 확정 주체·TIMEOUT 기간·활성 정책 버전의 미확정 사항도 유지합니다.
+
+추가 확인: 검증 도중 BE PR #16이 main에 병합됐습니다. MatchingTag 6종, filterVersion, FLOOD 후보 묶기/10초 경계 계약을 추가한 변경이며 그대로 fast-forward해 다시 연결했습니다. 이 PR의 `docs/erd.md`는 liveId·handlingRoute·policyVersion을 v0.5 이번 범위에 넣지 않는다고 명시합니다. 이는 Agent 쪽 사용자 확인 기준과의 **명시적인 범위 충돌**입니다. 채널 ID를 liveId로 대신 보내는 임시 연결을 만들지 않았으며, 실제 Gateway/변이 연결 전 팀 계약 정렬이 필요합니다.
