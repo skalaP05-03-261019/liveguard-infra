@@ -1,5 +1,9 @@
 # LIVE:GUARD Infra
 
+> **2026-10-21 전체 서비스 로컬 연결:** [실행 방법·검증 결과·미연결 구간](docs/full-stack.md).
+> `compose.full.yaml`을 추가하면 Frontend·Agent·Business MCP·RAG MCP까지 실행합니다.
+> 기존 아래의 DB/Backend 실행 방법은 그대로 사용할 수 있습니다. AI 판정·승인 E2E는 Backend 미구현 API로 아직 완료되지 않았습니다.
+
 LIVE:GUARD 프로젝트의 로컬 Docker 개발 환경을 관리하는 저장소입니다.
 
 현재 PostgreSQL과 Spring Boot Backend를 Docker Compose로 통합 실행할 수 있습니다. 데이터베이스 스키마와 초기 데이터는 Backend의 Flyway 마이그레이션을 통해 관리합니다.

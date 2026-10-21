@@ -1,0 +1,83 @@
+# Overlay: docker compose -f compose.yaml -f compose.full.yaml up -d --build
+# Agent runtime currently requires liveguard-agent PR #27. See docs/full-stack.md.
+x-agent-image: &agent-image
+  image: liveguard-agent:integration
+  build:
+    context: ../liveguard-agent
+    dockerfile: Dockerfile
+
+services:
+  backend:
+    environment:
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Run scripts/init-local-env.py first}
+
+  frontend:
+    build:
+      context: ../liveguard-fe
+      args:
+        VITE_USE_API: "true"
+        VITE_API_BASE_URL: ""
+    environment:
+      BACKEND_URL: http://backend:8080
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:8080"
+    depends_on:
+      backend:
+        condition: service_started
+
+  agent:
+    <<: *agent-image
+    environment:
+      AGENT_SERVICE_TOKEN: ${AGENT_SERVICE_TOKEN:?Run scripts/init-local-env.py first}
+      AGENT_TASK_DB_PATH: /home/liveguard/tasks.sqlite3
+      AGENT_CHECKPOINT_DB_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      BUSINESS_MCP_URL: http://business-mcp:8002/mcp
+      BUSINESS_MCP_AGENT_TOKEN: ${BUSINESS_MCP_AGENT_TOKEN:?Run scripts/init-local-env.py first}
+      RAG_MCP_URL: http://rag-mcp:8003/mcp
+      RAG_MCP_AGENT_TOKEN: ${RAG_MCP_AGENT_TOKEN:?Run scripts/init-local-env.py first}
+      MODEL_PROVIDER: openai
+      MODEL_NAME: ${MODEL_NAME:-}
+      MODEL_API_KEY: ${MODEL_API_KEY:-}
+      # No invented BE adapter: health explicitly reports readyForTasks=false.
+      AGENT_GATEWAY_FACTORY: ""
+    volumes:
+      - agent_tasks:/home/liveguard
+    ports:
+      - "127.0.0.1:${AGENT_PORT:-8001}:8001"
+    depends_on:
+      db:
+        condition: service_healthy
+      business-mcp:
+        condition: service_started
+      rag-mcp:
+        condition: service_started
+
+  business-mcp:
+    <<: *agent-image
+    command: ["python", "-m", "app.business_mcp"]
+    environment:
+      BUSINESS_MCP_HOST: 0.0.0.0
+      BUSINESS_MCP_ALLOWED_HOSTS: localhost:*,127.0.0.1:*,business-mcp:*
+      BUSINESS_BACKEND_BASE_URL: http://backend:8080
+      BUSINESS_MCP_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Run scripts/init-local-env.py first}
+      BUSINESS_MCP_AGENT_TOKEN: ${BUSINESS_MCP_AGENT_TOKEN:?Run scripts/init-local-env.py first}
+    depends_on:
+      backend:
+        condition: service_started
+
+  rag-mcp:
+    <<: *agent-image
+    command: ["python", "-m", "app.rag_mcp"]
+    environment:
+      RAG_MCP_HOST: 0.0.0.0
+      RAG_MCP_ALLOWED_HOSTS: localhost:*,127.0.0.1:*,rag-mcp:*
+      RAG_DB_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      RAG_MCP_AGENT_TOKEN: ${RAG_MCP_AGENT_TOKEN:?Run scripts/init-local-env.py first}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  agent_tasks:
