@@ -2,3 +2,6 @@
 .env.*
 !.env.example
 .DS_Store
+# Earlier local attempts; authoritative final run is tracked separately.
+evidence/v1-browser/
+verification/node_modules/
