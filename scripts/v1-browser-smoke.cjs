@@ -10,7 +10,7 @@ const checked=name=>{report.checks.push(name);console.log('PASS',name);};
  const browser=await chromium.launch({headless:true,executablePath:'/usr/bin/chromium',args:['--no-sandbox','--disable-dev-shm-usage']});
  const contexts=[];
  async function login(account,button){
-  const context=await browser.newContext({viewport:{width:1440,height:1000}});contexts.push(context);
+  const context=await browser.newContext({viewport:{width:1440,height:1000},timezoneId:"Asia/Seoul"});contexts.push(context);
   const page=await context.newPage();page.setDefaultTimeout(15000);console.log('LOGIN',account);
   page.on('pageerror',e=>report.errors.push(e.message));page.on('request',r=>{if(r.method()==='POST')console.log('POST',r.url());});page.on('response',r=>{if(r.request().method()==='POST')console.log('STATUS',r.status(),r.url());});
   await page.goto(base,{waitUntil:'domcontentloaded',timeout:20000});await page.waitForLoadState('networkidle',{timeout:5000}).catch(()=>{});
@@ -27,6 +27,7 @@ const checked=name=>{report.checks.push(name);console.log('PASS',name);};
  try{
   const operator=await login('moderator','스트리머로 시작하기');
   await operator.locator('.v1-live-id').waitFor({timeout:2500}).catch(()=>{});
+  if(process.env.FRESH_LIVE==='1'&&(await operator.locator('.v1-live-id').count())){await operator.getByRole('button',{name:'방송 종료',exact:true}).click();await operator.waitForTimeout(500);await operator.getByRole('button',{name:'새로고침',exact:true}).click();await operator.waitForTimeout(500);}
   if(!(await operator.locator('.v1-live-id').count()))await operator.getByRole('button',{name:'방송 시작',exact:true}).click();
   const viewer=await login('demo-viewer-10','시청자로 시작하기');
   const observer=await login('demo-viewer-11','시청자로 시작하기');
@@ -107,6 +108,49 @@ const checked=name=>{report.checks.push(name);console.log('PASS',name);};
    await capture(repeat,'author-kicked-until-live-end');
    checked('Three distinct confirmed cases -> separate human KICK approval -> real MCP execution -> target SSE disconnect');
   }
+  const recovered=await login(process.env.RECOVERY_ACCOUNT||'demo-viewer-18','시청자로 시작하기');
+  const mistaken='시청자 11 너 꺼져 오판취소 '+nonce;
+  await recovered.getByLabel('채팅 보내기',{exact:true}).fill(mistaken);
+  await recovered.getByRole('button',{name:'채팅 전송',exact:true}).click();
+  const recoveryReview=operator.locator('.v1-review').filter({has:operator.locator('.v1-finding blockquote').filter({hasText:mistaken})}).first();
+  await recoveryReview.waitFor({timeout:120000});
+  await recoveryReview.getByLabel('괴롭힘',{exact:true}).check();
+  await recoveryReview.getByLabel('결정 이유',{exact:true}).fill('복구 시험용으로 문맥 위반을 확인합니다.');
+  await recoveryReview.getByRole('button',{name:'위반 확정',exact:true}).click();
+  await recovered.locator('.v1-message.hidden').filter({hasText:mistaken}).waitFor({timeout:30000});
+  const recoveryCard=operator.locator('.v1-recovery').filter({hasText:mistaken}).first();
+  await recoveryCard.locator('summary').click();
+  await recoveryCard.getByLabel('취소 사유',{exact:true}).fill('문맥 재확인 결과 오판이므로 해당 확정 근거를 취소합니다.');
+  await recoveryCard.getByRole('button',{name:'확정 근거 취소',exact:true}).click();
+  await observer.getByText(mistaken,{exact:true}).waitFor({timeout:30000});
+  await recovered.getByLabel('채팅 보내기',{exact:true}).fill('제한 복구 뒤 전송 '+nonce);
+  const restored=recovered.waitForResponse(r=>r.url().includes('/messages')&&r.request().method()==='POST');
+  await recovered.getByRole('button',{name:'채팅 전송',exact:true}).click();
+  if((await restored).status()!==201)throw Error('Recovery failed to remove own timeout');
+  await capture(operator,'operator-finding-revoked');await capture(observer,'observer-recovery-public');
+  checked('Human finding revocation -> real PUBLIC recovery and timeout removal -> new send accepted');
+  const flooder=await login('demo-viewer-17','시청자로 시작하기');
+  const flood='같은 문장 반복 시험 '+nonce;
+  for(let i=0;i<4;i++){
+   await flooder.getByLabel('채팅 보내기',{exact:true}).fill(flood);
+   const sent=flooder.waitForResponse(r=>r.url().includes('/messages')&&r.request().method()==='POST');
+   await flooder.getByRole('button',{name:'채팅 전송',exact:true}).click();
+   if((await sent).status()!==201)throw Error('First FLOOD burst unexpectedly timed out');
+  }
+  await operator.waitForFunction(value=>[...document.querySelectorAll('.v1-message.hidden')].filter(n=>n.textContent.includes(value)).length===2,flood,{timeout:20000});
+  if(await observer.getByText(flood,{exact:true}).count()!==2)throw Error('FLOOD changed first two public context messages');
+  await capture(operator,'operator-flood-third-fourth-hidden');
+  checked('FLOOD burst keeps first two PUBLIC; third and fourth share confirmed hidden handling');
+  const sessionChange=await operator.evaluate(async()=>{
+   await fetch('/api/auth/me');
+   const token=decodeURIComponent(document.cookie.split('; ').find(x=>x.startsWith('XSRF-TOKEN=')).split('=').slice(1).join('='));
+   return (await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':token},body:JSON.stringify({username:'demo-viewer-19',password:'liveguard-local'})})).status;
+  });
+  if(sessionChange!==200)throw Error('Same-cookie reauthentication failed');
+  await operator.getByText('시청자 19',{exact:true}).waitFor({timeout:15000});
+  if(await operator.locator('.v1-reviews').count())throw Error('Old operator review panel survived identity change');
+  await capture(operator,'same-cookie-viewer-cleared-operator-state');
+  checked('Same-cookie account switch clears old operator cards and private chat state');
   if(report.errors.length)throw Error('Browser runtime error');
   report.status='PASS';
  }catch(error){report.status='FAIL';report.error=error.message;console.error(error.message);for(let i=0;i<contexts.length;i++){const p=contexts[i].pages()[0];if(p)await capture(p,'failure-'+i);}process.exitCode=1;}

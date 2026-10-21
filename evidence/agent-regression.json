@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-21",
+  "baseCommit": "5d0b471d85edce864393355033d2d6fd6192edd1",
+  "asgi": {
+    "tests": 188,
+    "skipped": 0,
+    "seconds": 5.637,
+    "exitCode": 0
+  },
+  "tcp": {
+    "tests": 188,
+    "skipped": 0,
+    "seconds": 15.904,
+    "exitCode": 0
+  },
+  "actualPostgres": true,
+  "realModelCalls": 0,
+  "actualSanctions": 0
+}

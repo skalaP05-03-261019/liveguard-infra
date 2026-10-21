@@ -1,3 +1,58 @@
+# 최신 7서비스 통합 시험 (2026-10-21)
+
+BE #34·#35·#36·#37을 포함한 후속 #39, Agent #50·#51·#53, FE #3, Infra #3 기반 #5를 연결했다. 이전 실행 기록과 증거는 아래에 보존한다.
+
+## 실행
+
+형제 디렉터리에 네 저장소를 clone하고 .env.example을 .env로 복사한다. 실제 토큰/모델 키/DB 비밀번호는 .env에만 둔다. 다음 시험 설정을 명시해야 통합 정책과 검토 화면이 활성화된다.
+
+```dotenv
+LIVEGUARD_POLICY_VERSION=v3.1
+LIVEGUARD_TBD_FIXTURE_ENABLED=true
+LIVEGUARD_V1_UI=true
+AGENT_DELIVERY_ENABLED=true
+AGENT_GATEWAY_FACTORY=app.integration.http_gateway:configured_gateway
+MODEL_PROVIDER=openai
+MODEL_NAME=gpt-5.4-mini
+# 선택: Rabbit 경로는 암호도 설정하고 --profile rabbit 사용
+AGENT_DELIVERY_TRANSPORT=rabbit
+RABBITMQ_USER=liveguard
+RABBITMQ_PASSWORD=<로컬 생성 값>
+```
+
+LIVEGUARD_OPENAI_API_KEY, 서비스별 독립 토큰, RAG_DB_URL, AGENT_CHECKPOINT_DB_URL도 설정한다. 두 DB URL은 db:5432의 같은 DB를 가리킨다. 색인 버전은 정확히 v3.1이다. 다른 명시적 POLICY_VERSION을 함께 지정하면 실패해야 한다. 기존 3.1 색인은 별도로 보존한다.
+
+```bash
+docker compose --profile rabbit config --quiet
+docker compose --profile rabbit up -d --build
+docker compose --profile rabbit run --rm --no-deps rag-mcp python -m app.rag_mcp.index
+```
+
+Rabbit을 선택하지 않으면 AGENT_DELIVERY_TRANSPORT=db로 실행한다. Rabbit 호스트 포트는 공개하지 않는다. 팀 #35의 발행 확인·수동 ACK·DB 복구·lease·재시도 예산을 보존한다. 특정 알림 대상 행이 발행 갱신 중이면 기다린 후 lease를 계산하여 작업 누락/불필요한 회복 지연을 막는다.
+
+현재 로컬은 프로젝트 liveguard-unified, FE http://localhost:3003, BE8083, Agent8005, DB55441의 새 liveguard_final DB다. 기존 3000/3002 스택과 DB를 보존했다. V102/V202는 현재 main #36 파일 그대로이며 V103(#37), V203/V204가 추가된다. #34/#35만 적용한 DB에 #36에서 생긴 체크섬 차이는 자동 repair하지 않는다. 백업 후 별도 이관해야 한다.
+
+로컬 계정: moderator / admin / viewer / demo-viewer-10..19, 비밀번호 liveguard-local. 이들은 로컬 시드다. 시청자 추가는 scripts/seed-v1-viewers.sql을 새 로컬 DB에만 적용한다. 역할별 동시 로그인은 서로 다른 브라우저 프로필 또는 localhost / viewer.localhost / admin.localhost를 사용한다. 같은 호스트의 쿠키는 포트가 달라도 공유된다.
+
+## 실제 브라우저 재실행
+
+```bash
+docker build -t liveguard-browser-test verification
+docker run --rm --network container:LIVEGUARD_FRONTEND_CONTAINER \
+  -e BASE_URL=http://localhost:8080 -e FRESH_LIVE=1 -e RUN_KICK=1 \
+  -e OUTPUT_DIR=/evidence/unified-final \
+  -v "$PWD/scripts:/scripts:ro" -v "$PWD/evidence:/evidence" \
+  liveguard-browser-test
+```
+
+FRESH_LIVE=1은 시험 방송을 종료하고 새 방송을 만든다. 별도 로컬 시험 스택에서만 사용한다. 실제 모델 비용·테스트 채팅·결정·제재가 발생한다. 모의 네트워크 응답은 없다. report.json, 캡처, verification.json을 증거로 사용한다. 체크포인트/재시작·오래된 버전·다중 hold·다중 강퇴·중복 조치·권한 회수는 Java/Agent 통합 테스트 증거로 구분한다.
+
+PII의 검증 사실은 아직 UNKNOWN이고, 모델 결과만으로 개인정보 위반을 확정하지 않는다. 사람 CONTEXT 검토로 보내는 안전 경계와 실제 검증 사실 제공은 구분한다. fixture 통과는 정책 승인이나 전체 ERD/운영 준비 완료를 뜻하지 않는다. AI 품질 수치는 별도 평가가 필요하다.
+
+---
+
+## 이전 6서비스 실행 기록
+
 # 실제 6서비스 통합 시험 (Infra #4)
 
 기존 Infra PR #3의 MCP/Agent/볼륨 문서를 기반으로 FE와 포트·빌드 경로 설정을 추가했다. #2의 이전 6서비스 통합 PR은 별개로 남아 있으며 무리하게 병합해 서로 덮어쓰지 않는다.

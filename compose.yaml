@@ -36,6 +36,11 @@ services:
       LIVEGUARD_POLICY_VERSION: ${LIVEGUARD_POLICY_VERSION:-}
       LIVEGUARD_TBD_FIXTURE_ENABLED: ${LIVEGUARD_TBD_FIXTURE_ENABLED:-false}
       AGENT_DELIVERY_ENABLED: ${AGENT_DELIVERY_ENABLED:-false}
+      AGENT_DELIVERY_TRANSPORT: ${AGENT_DELIVERY_TRANSPORT:-db}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_USER: ${RABBITMQ_USER:-liveguard}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-}
       AGENT_BASE_URL: http://agent:8001
       AGENT_SERVICE_TOKEN: ${AGENT_SERVICE_TOKEN:?Set AGENT_SERVICE_TOKEN in .env}
 
@@ -128,6 +133,21 @@ services:
       db:
         condition: service_healthy
 
+  rabbitmq:
+    image: rabbitmq:4.1-alpine
+    profiles: ["rabbit"]
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-liveguard}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-}
+    volumes:
+      - liveguard_rabbitmq:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
   frontend:
     build:
       context: ${FRONTEND_BUILD_CONTEXT:-../liveguard-fe}
@@ -145,3 +165,4 @@ services:
 volumes:
   liveguard_db:
   liveguard_agent_tasks:
+  liveguard_rabbitmq:
