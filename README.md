@@ -10,6 +10,8 @@ Docker Compose를 통해 PostgreSQL, Spring Boot Backend, FastAPI Agent, Busines
 
 서비스별 소스 코드는 각 담당 저장소에서 관리하며, Infra 저장소에서는 컨테이너 실행, 환경변수, 서비스 간 통신 및 데이터 영속화를 관리합니다.
 
+> Business MCP 배포 전 [이중화 운영 절차](docs/business-mcp-ha.md)의 소스 검증·사전 빌드·전환 검증을 먼저 확인하세요. 아래 이전 통합 실행 기록만으로 HA 배포를 진행하지 마세요.
+
 ## 1. 시스템 구성
 
 | 서비스       | 기술                     | 역할                                        | 로컬 포트 |
@@ -470,3 +472,11 @@ docker compose down
 현재 Agent는 실제 Backend ModerationGateway가 연결되지 않아 `readyForTasks: false`를 반환합니다.
 
 Infra 설정만으로 이를 임의로 활성화하지 않으며, Backend 및 Agent 구현이 준비된 이후 실제 통합 테스트를 진행합니다.
+
+## 13. Business MCP 이중화
+
+Business MCP 공통 주소는 그대로 유지하며 HAProxy가 `business-mcp-1`,
+`business-mcp-2`로 요청을 분산합니다. 두 MCP는 동일한 사전 빌드 이미지를 사용합니다.
+기존 단일 인스턴스 설명 대신 [이중화 운영·롤백 문서](docs/business-mcp-ha.md)를
+따르고, [실제 검증 결과와 미완료 항목](docs/business-mcp-validation.md)을 확인하세요.
+단일 Agent 구성과 기존 named volume은 유지하며 다중 Agent 완료를 의미하지 않습니다.

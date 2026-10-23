@@ -1,0 +1,45 @@
+name: Business MCP static checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      # Syntax/config validation only. No real credentials or Backend connection.
+      AGENT_CHECKPOINT_DB_URL: postgresql://localhost/ci_unused
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Validate Compose invariants
+        run: |
+          python3 scripts/verify-business-mcp-config.py --portable \
+            --env-file .env.example --project liveguard-ci \
+            --output "$RUNNER_TEMP/business-mcp-static.json"
+          docker compose --env-file .env.example --profile rabbit config --quiet
+      - name: Validate HAProxy syntax
+        run: |
+          docker run --rm \
+            -v "$PWD/haproxy/business-mcp.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro" \
+            haproxy:3.0.30-alpine@sha256:cf3af0facf7eb22b9fee463daf0fbc07ead740b8150696dce724264faf7b4318 \
+            haproxy -c -f /usr/local/etc/haproxy/haproxy.cfg
+      - name: Check Python syntax and whitespace
+        run: |
+          python3 - <<'PY'
+          import ast, runpy
+          from pathlib import Path
+          for path in (Path('scripts/verify-business-mcp.py'),
+                       Path('scripts/verify-business-mcp-config.py'),
+                       Path('scripts/fixtures/mcp_backend.py')):
+              ast.parse(path.read_text(), filename=str(path))
+          check = runpy.run_path('scripts/verify-business-mcp.py')['preservation']
+          assert check({}, {})['status'] == 'NOT RUN'
+          before = {'c': {'name': 'example', 'mounts': [{'Type': 'volume'}]}}
+          assert check(before, before)['status'] == 'PASS'
+          assert check(before, {})['status'] == 'FAIL'
+          PY
+          git diff --check "${{ github.event.pull_request.base.sha || github.event.before }}" HEAD

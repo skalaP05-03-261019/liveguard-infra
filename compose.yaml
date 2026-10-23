@@ -1,3 +1,38 @@
+x-business-mcp: &business-mcp
+  image: ${BUSINESS_MCP_IMAGE:?Set a verified immutable Business MCP image tag or digest}
+  pull_policy: never
+  build:
+    context: ${AGENT_BUILD_CONTEXT:-../liveguard-agent}
+    dockerfile: Dockerfile
+
+  command: ["python", "-m", "app.business_mcp"]
+
+  restart: unless-stopped
+  stop_grace_period: 30s
+
+  environment:
+    BUSINESS_MCP_HOST: 0.0.0.0
+    BUSINESS_MCP_PORT: "8002"
+    BUSINESS_MCP_ALLOWED_HOSTS: "business-mcp:*,business-mcp-1:*,business-mcp-2:*,localhost:*,127.0.0.1:*"
+    BUSINESS_BACKEND_BASE_URL: http://backend:8080
+    BUSINESS_MCP_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Set INTERNAL_SERVICE_TOKEN in .env}
+    BUSINESS_MCP_AGENT_TOKEN: ${BUSINESS_MCP_AGENT_TOKEN:?Set BUSINESS_MCP_AGENT_TOKEN in .env}
+    BUSINESS_MCP_MAX_REQUESTS: ${BUSINESS_MCP_MAX_REQUESTS:-16}
+    BUSINESS_MCP_BACKEND_CONNECTIONS: ${BUSINESS_MCP_BACKEND_CONNECTIONS:-16}
+    BUSINESS_MCP_BACKEND_TIMEOUT: ${BUSINESS_MCP_BACKEND_TIMEOUT:-10}
+    BUSINESS_MCP_SHUTDOWN_TIMEOUT: ${BUSINESS_MCP_SHUTDOWN_TIMEOUT:-20}
+
+  healthcheck:
+    test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/ready', timeout=2)"]
+    interval: 5s
+    timeout: 3s
+    retries: 3
+
+  depends_on:
+    backend:
+      condition: service_started
+
+
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -66,6 +101,8 @@ services:
       MODEL_NAME: ${MODEL_NAME:-}
       MODEL_API_KEY: ${LIVEGUARD_OPENAI_API_KEY:-}
       BUSINESS_MCP_URL: http://business-mcp:8002/mcp
+      BUSINESS_MCP_CLIENT_CONCURRENCY: ${BUSINESS_MCP_CLIENT_CONCURRENCY:-8}
+      BUSINESS_MCP_CALL_TIMEOUT: ${BUSINESS_MCP_CALL_TIMEOUT:-10}
       RAG_MCP_URL: http://rag-mcp:8003/mcp
       BUSINESS_MCP_AGENT_TOKEN: ${BUSINESS_MCP_AGENT_TOKEN:?Set BUSINESS_MCP_AGENT_TOKEN in .env}
       RAG_MCP_AGENT_TOKEN: ${RAG_MCP_AGENT_TOKEN:?Set RAG_MCP_AGENT_TOKEN in .env}
@@ -87,27 +124,29 @@ services:
       rag-mcp:
         condition: service_started
 
+  business-mcp-1:
+    <<: *business-mcp
+
+  business-mcp-2:
+    <<: *business-mcp
+
   business-mcp:
-    build:
-      context: ${AGENT_BUILD_CONTEXT:-../liveguard-agent}
-      dockerfile: Dockerfile
-
-    command: ["python", "-m", "app.business_mcp"]
-
+    image: ${HAPROXY_IMAGE:-haproxy:3.0.30-alpine@sha256:cf3af0facf7eb22b9fee463daf0fbc07ead740b8150696dce724264faf7b4318}
     restart: unless-stopped
-
-    environment:
-      BUSINESS_MCP_HOST: 0.0.0.0
-      BUSINESS_MCP_PORT: "8002"
-      BUSINESS_MCP_ALLOWED_HOSTS: "business-mcp:*,localhost:*,127.0.0.1:*"
-      BUSINESS_BACKEND_BASE_URL: http://backend:8080
-      BUSINESS_MCP_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Set INTERNAL_SERVICE_TOKEN in .env}
-      BUSINESS_MCP_AGENT_TOKEN: ${BUSINESS_MCP_AGENT_TOKEN:?Set BUSINESS_MCP_AGENT_TOKEN in .env}
-
-
+    stop_grace_period: 30s
+    volumes:
+      - ./haproxy/business-mcp.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    # Neither upstream must be healthy for the proxy to start.
     depends_on:
-      backend:
+      business-mcp-1:
         condition: service_started
+      business-mcp-2:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8002/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
 
   rag-mcp:
     build:
