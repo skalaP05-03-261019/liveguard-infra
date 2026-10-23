@@ -1,0 +1,280 @@
+{
+  "project": "liveguard-mcp-ha-test-3407b06e31",
+  "results": {
+    "static": "PASS",
+    "distribution": {
+      "172.24.0.3": 6,
+      "172.24.0.4": 6
+    },
+    "single_failure": {
+      "172.24.0.4": 12
+    },
+    "degraded_start": {
+      "172.24.0.4": 12
+    },
+    "recovery": {
+      "172.24.0.7": 6,
+      "172.24.0.4": 6
+    },
+    "graceful_inflight": {
+      "172.24.0.4": 12
+    },
+    "drain_ready_503": "NOT RUN: signal closes listener before reliable HTTP sampling; application-level test required",
+    "total_outage": "PASS: HTTP 503",
+    "credential_logging": "PASS",
+    "existing_mounts": "PASS"
+  },
+  "limitations": [
+    "Fixture Backend; Spring and UNKNOWN effect acceptance are separate."
+  ],
+  "image_id": "sha256:1b8b0c754dc3876d6374a708cb055215166cab4b78c3d17ccd88b606ba30564c",
+  "dns_change": {
+    "before": "172.24.0.3",
+    "after": "172.24.0.7"
+  },
+  "preserved_mounts": [
+    {
+      "name": "/liveguard-final-review-agent-1",
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "liveguard-final-review_liveguard_agent_tasks",
+          "Source": "/var/lib/docker/volumes/liveguard-final-review_liveguard_agent_tasks/_data",
+          "Destination": "/var/lib/liveguard-agent",
+          "Driver": "local",
+          "Mode": "rw",
+          "RW": true,
+          "Propagation": ""
+        }
+      ]
+    },
+    {
+      "name": "/liveguard-final-review-frontend-1",
+      "mounts": []
+    },
+    {
+      "name": "/liveguard-final-review-backend-1",
+      "mounts": []
+    },
+    {
+      "name": "/liveguard-final-review-db-1",
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "liveguard-final-review_liveguard_db",
+          "Source": "/var/lib/docker/volumes/liveguard-final-review_liveguard_db/_data",
+          "Destination": "/var/lib/postgresql/data",
+          "Driver": "local",
+          "Mode": "rw",
+          "RW": true,
+          "Propagation": ""
+        }
+      ]
+    },
+    {
+      "name": "/liveguard-final-review-business-mcp-1",
+      "mounts": []
+    },
+    {
+      "name": "/liveguard-final-review-rag-mcp-1",
+      "mounts": []
+    },
+    {
+      "name": "/liveguard-final-review-rabbitmq-1",
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "liveguard-final-review_liveguard_rabbitmq",
+          "Source": "/var/lib/docker/volumes/liveguard-final-review_liveguard_rabbitmq/_data",
+          "Destination": "/var/lib/rabbitmq",
+          "Driver": "local",
+          "Mode": "rw",
+          "RW": true,
+          "Propagation": ""
+        }
+      ]
+    },
+    {
+      "name": "/liveguard-main-review-backend-1",
+      "mounts": []
+    },
+    {
+      "name": "/liveguard-main-review-rabbitmq-1",
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "liveguard-main-review_liveguard_rabbitmq",
+          "Source": "/var/lib/docker/volumes/liveguard-main-review_liveguard_rabbitmq/_data",
+          "Destination": "/var/lib/rabbitmq",
+          "Driver": "local",
+          "Mode": "rw",
+          "RW": true,
+          "Propagation": ""
+        }
+      ]
+    },
+    {
+      "name": "/liveguard-main-review-agent-1",
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "liveguard-main-review_liveguard_agent_tasks",
+          "Source": "/var/lib/docker/volumes/liveguard-main-review_liveguard_agent_tasks/_data",
+          "Destination": "/var/lib/liveguard-agent",
+          "Driver": "local",
+          "Mode": "rw",
+          "RW": true,
+          "Propagation": ""
+        }
+      ]
+    },
+    {
+      "name": "/liveguard-main-review-frontend-1",
+      "mounts": []
+    },
+    {
+      "name": "/liveguard-main-review-business-mcp-1",
+      "mounts": []
+    },
+    {
+      "name": "/liveguard-main-review-rag-mcp-1",
+      "mounts": []
+    },
+    {
+      "name": "/liveguard-main-review-db-1",
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "liveguard-main-review_liveguard_db",
+          "Source": "/var/lib/docker/volumes/liveguard-main-review_liveguard_db/_data",
+          "Destination": "/var/lib/postgresql/data",
+          "Driver": "local",
+          "Mode": "rw",
+          "RW": true,
+          "Propagation": ""
+        }
+      ]
+    },
+    {
+      "name": "/liveguard-v1-review-agent-1",
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "liveguard-v1-review_liveguard_agent_tasks",
+          "Source": "/var/lib/docker/volumes/liveguard-v1-review_liveguard_agent_tasks/_data",
+          "Destination": "/var/lib/liveguard-agent",
+          "Driver": "local",
+          "Mode": "rw",
+          "RW": true,
+          "Propagation": ""
+        }
+      ]
+    },
+    {
+      "name": "/liveguard-v1-review-rag-mcp-1",
+      "mounts": []
+    },
+    {
+      "name": "/liveguard-v1-review-business-mcp-1",
+      "mounts": []
+    },
+    {
+      "name": "/liveguard-v1-review-frontend-1",
+      "mounts": []
+    },
+    {
+      "name": "/liveguard-v1-review-backend-1",
+      "mounts": []
+    },
+    {
+      "name": "/liveguard-v1-review-db-1",
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "liveguard-v1-review_liveguard_db",
+          "Source": "/var/lib/docker/volumes/liveguard-v1-review_liveguard_db/_data",
+          "Destination": "/var/lib/postgresql/data",
+          "Driver": "local",
+          "Mode": "rw",
+          "RW": true,
+          "Propagation": ""
+        }
+      ]
+    },
+    {
+      "name": "/liveguard-infra-frontend-1",
+      "mounts": []
+    },
+    {
+      "name": "/liveguard-infra-backend-1",
+      "mounts": []
+    },
+    {
+      "name": "/liveguard-infra-agent-1",
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "liveguard-infra_liveguard_agent_tasks",
+          "Source": "/var/lib/docker/volumes/liveguard-infra_liveguard_agent_tasks/_data",
+          "Destination": "/var/lib/liveguard-agent",
+          "Driver": "local",
+          "Mode": "rw",
+          "RW": true,
+          "Propagation": ""
+        }
+      ]
+    },
+    {
+      "name": "/liveguard-infra-business-mcp-1",
+      "mounts": []
+    },
+    {
+      "name": "/liveguard-infra-rag-mcp-1",
+      "mounts": []
+    },
+    {
+      "name": "/liveguard-infra-db-1",
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "liveguard-infra_liveguard_db",
+          "Source": "/var/lib/docker/volumes/liveguard-infra_liveguard_db/_data",
+          "Destination": "/var/lib/postgresql/data",
+          "Driver": "local",
+          "Mode": "rw",
+          "RW": true,
+          "Propagation": ""
+        }
+      ]
+    },
+    {
+      "name": "/liveguard-postgres",
+      "mounts": [
+        {
+          "Type": "bind",
+          "Source": "/host_mnt/Users/kang-inseo/projects/liveguard-infra/postgres/init",
+          "Destination": "/docker-entrypoint-initdb.d",
+          "Mode": "ro",
+          "RW": false,
+          "Propagation": "rprivate"
+        },
+        {
+          "Type": "volume",
+          "Name": "liveguard-infra_postgres_data",
+          "Source": "/var/lib/docker/volumes/liveguard-infra_postgres_data/_data",
+          "Destination": "/var/lib/postgresql/data",
+          "Driver": "local",
+          "Mode": "rw",
+          "RW": true,
+          "Propagation": ""
+        }
+      ]
+    }
+  ],
+  "preserved_projects": [
+    "liveguard-infra",
+    "liveguard-final-review",
+    "liveguard-main-review",
+    "liveguard-v1-review"
+  ]
+}
