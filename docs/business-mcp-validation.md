@@ -19,7 +19,9 @@
 | 두 MCP image ID | PASS | 양쪽 동일한 로컬 image ID 기록 |
 | 정상 인증 조회 분산 | PASS | 가상 Backend 관측 source IP, 두 MCP 각각 6건 |
 | MCP1 SIGKILL | PASS | probe 수렴 뒤 MCP2가 신규 조회 12건 전부 처리 |
-| unavailable 상태 신규 시작 | PASS | MCP1 중지 상태에서 LB와 Agent 재생성, MCP2 조회 12건; Agent 업무 runtime 제외 |
+| 의존성을 적용한 최초 시작 | PASS | MCP1 실행 중이나 unavailable, `--no-deps` 없이 Agent→LB→MCP 시작, MCP2 조회 12건 |
+| MCP 자동 재시작 | PASS | 실제 unless-stopped 상태 내부 SIGTERM 후 restart count 증가 및 양쪽 조회 |
+| unavailable 상태 재생성 | PASS | MCP1 중지 상태에서 `--no-deps`로 LB와 Agent 재생성, MCP2 조회 12건; 초기 시작 시험과 별도 |
 | IP 변경 후 복구 | PASS | 재생성 전 IP와 다른 IP 확인 후 두 MCP 각각 6건 |
 | 진행 요청 graceful 종료 | PASS | 요청 처리 중 stop, 1초 뒤 요청/stop 미완료, release 후 정상 응답, 생존 MCP 조회 12건 |
 | drain /ready 503 외부 관측 | NOT RUN | Docker shutdown 중 listener 종료가 빠름; 503 자체는 아래 app test로 검증 |
@@ -50,9 +52,9 @@ export BACKEND_BUILD_CONTEXT=/absolute/path/to/liveguard-be
 export FRONTEND_BUILD_CONTEXT=/absolute/path/to/liveguard-fe
 docker build -t "$BUSINESS_MCP_IMAGE" "$AGENT_BUILD_CONTEXT"
 python3 scripts/verify-business-mcp-config.py --env-file /safe/existing/.env \
-  --project liveguard-infra --output evidence/business-mcp-static.json
+  --project liveguard-infra --output evidence/business-mcp-ha.json
 python3 scripts/verify-business-mcp.py --env-file /safe/existing/.env \
-  --preserve-project liveguard-final-review --preserve-project liveguard-main-review \
+  --preserve-project liveguard-infra --preserve-project liveguard-final-review --preserve-project liveguard-main-review \
   --preserve-project liveguard-v1-review --output evidence/business-mcp-ha.json
 docker run --rm -v "$PWD/haproxy/business-mcp.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro" \
   haproxy:3.0.30-alpine@sha256:cf3af0facf7eb22b9fee463daf0fbc07ead740b8150696dce724264faf7b4318 \
@@ -72,7 +74,23 @@ Backend URL만 `http://host.docker.internal:8084`로 override하고 기존
 
 ## 완료 범위
 
-Infra 코드 및 격리 Docker 가용성 검증, Spring 조회 연동은 완료했다.
+보완 후 Docker 가용성·정적 검증을 재실행했다. Spring 인증 조회 4회 성공은 최초 구현 때의
+관측이며 이번 보완에서는 재실행하지 않았다. 중복 Spring JSON은 제거하고 이 기록을 유지한다.
 운영 배포, 실제 종료 순간의 HTTP 503 포착, 실제 Spring 변경 효과 공동 인수는 미완료다.
 이미지 재빌드 재현성, 운영 부하, 네트워크 분할, 전체 Agent 업무 readiness까지 검증한
 결과로 확대 해석하지 않는다. 최종 운영 인수는 위 미완료 항목을 확인한 후 진행한다.
+
+
+## 병합 전 보완
+
+- 실제 Agent 소스 커밋 및 clean checkout 검증을 배포 전 필수 단계로 추가했다.
+- 신규 MCP 두 대의 readiness와 실제 Backend 인증 조회가 성공한 경우에만 기존 MCP를 교체한다.
+- 보호 대상이 없으면 NOT RUN, 명시한 프로젝트가 없으면 실패한다. 증거에는 비교 개수만 남긴다.
+- JSON 세 개를 하나로 통합했다. 상세 Docker mount 내부 경로 대신 비교 상태·대상 개수를 기록한다.
+- GitHub Actions는 비밀정보 없이 Compose·HAProxy·Python 정적 검증을 수행한다.
+  portable 모드에서는 역사적 서비스 비교·소스 provenance·build 경로 확인을 NOT RUN으로 구분한다.
+  기존 서비스의 정상적인 후속 변경을 막지 않도록 CI에서는 과거 커밋과 비교하지 않는다.
+
+보완 중 자동 재시작 시험은 Docker API 수동 kill을 사용해 timeout으로 실패했다.
+컨테이너 내부 SIGTERM으로 프로세스가 종료되는 상황으로 수정하여 재실행했다.
+mount 반환 순서가 달라 동일 구성을 실패로 판정한 것도 확인하여 destination 기준 정렬 후 비교한다.

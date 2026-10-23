@@ -1,5 +1,0 @@
-{
-  "backend": "existing Spring liveguard-final-review-backend-1",
-  "mutation_test": "NOT RUN: joint acceptance required",
-  "result": "PASS: four authenticated Spring case reads; bodies withheld"
-}

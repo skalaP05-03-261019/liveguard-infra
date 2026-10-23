@@ -10,6 +10,8 @@ Docker Compose를 통해 PostgreSQL, Spring Boot Backend, FastAPI Agent, Busines
 
 서비스별 소스 코드는 각 담당 저장소에서 관리하며, Infra 저장소에서는 컨테이너 실행, 환경변수, 서비스 간 통신 및 데이터 영속화를 관리합니다.
 
+> Business MCP 배포 전 [이중화 운영 절차](docs/business-mcp-ha.md)의 소스 검증·사전 빌드·전환 검증을 먼저 확인하세요. 아래 이전 통합 실행 기록만으로 HA 배포를 진행하지 마세요.
+
 ## 1. 시스템 구성
 
 | 서비스       | 기술                     | 역할                                        | 로컬 포트 |

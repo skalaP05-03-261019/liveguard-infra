@@ -6,7 +6,6 @@ Uses real Infra Compose plus a temporary fixture override; no existing volumes m
 import argparse
 import concurrent.futures
 import json
-import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -22,20 +21,45 @@ def run(args, **kw):
     return result.stdout.strip()
 
 def mounts(projects):
+    if not projects:
+        return {}
     ids = run(['docker','ps','-aq']).split()
     data = json.loads(run(['docker','inspect',*ids])) if ids else []
-    return {x['Id']: {'name':x['Name'], 'mounts':x['Mounts']} for x in data if x['Config'].get('Labels',{}).get('com.docker.compose.project') in projects}
+    selected = [x for x in data if (x['Config'].get('Labels') or {}).get('com.docker.compose.project') in projects]
+    found = {x['Config']['Labels']['com.docker.compose.project'] for x in selected}
+    missing = projects - found
+    if missing:
+        raise RuntimeError('Preservation projects not found: ' + ', '.join(sorted(missing)))
+    return {x['Id']: {'name': x['Name'], 'mounts': sorted([
+        {k: m.get(k) for k in ('Type', 'Name', 'Source', 'Destination', 'RW')}
+        for m in x['Mounts']], key=lambda m: m['Destination'])} for x in selected}
+
+
+def preservation(before, after):
+    if not before:
+        return {'status': 'NOT RUN', 'containers': 0, 'volumes': 0}
+    return {
+        'status': 'PASS' if all(after.get(k) == v for k, v in before.items()) else 'FAIL',
+        'containers': len(before),
+        'volumes': sum(m['Type'] == 'volume' for v in before.values() for m in v['mounts']),
+    }
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--env-file', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
-    parser.add_argument('--preserve-project', action='append', default=['liveguard-infra'],
+    parser.add_argument('--preserve-project', action='append', default=[],
                         help='Existing project whose container mounts must remain identical; repeatable')
     args=parser.parse_args()
+    if not __debug__:
+        raise RuntimeError('Run validation without Python optimization (-O/PYTHONOPTIMIZE)')
     project='liveguard-mcp-ha-test-'+uuid.uuid4().hex[:10]
     base=['docker','compose','--env-file',str(args.env_file.resolve()),'-p',project,'-f',str(ROOT/'compose.yaml')]
     report={'project':project,'results':{},'limitations':['Fixture Backend; Spring and UNKNOWN effect acceptance are separate.']}
+    if args.output.exists():
+        previous=json.loads(args.output.read_text())
+        if 'static' in previous:
+            report['static']=previous['static']
     before=mounts(set(args.preserve_project))
     config=json.loads(run(base+['config','--format','json']))
     for k in ('INTERNAL_SERVICE_TOKEN','BUSINESS_MCP_AGENT_TOKEN','AGENT_SERVICE_TOKEN'):
@@ -45,7 +69,8 @@ def main():
     # Use only existing secrets, passed to Compose internally; no generated credentials.
     override={'services':{
         'backend': {'image':image,'build':None,'ports':[], 'depends_on':{},'volumes':[str(ROOT/'scripts/fixtures')+':/fixture:ro'], 'command':['uvicorn','mcp_backend:app','--app-dir','/fixture','--host','0.0.0.0','--port','8080','--no-access-log']},
-        'business-mcp-1':{'restart':'no'},'business-mcp-2':{'restart':'no'},
+        # Only unrelated RAG is replaced; production Agent -> LB -> MCP dependencies remain.
+        'rag-mcp': {'image':image,'build':None,'depends_on':{},'command':['sleep','600']},
         'agent':{'image':image,'build':None,'ports':[],'volumes':[], 'environment':{'AGENT_TASK_DB_PATH':'/tmp/ha-test.sqlite3','AGENT_GATEWAY_FACTORY':'','MODEL_API_KEY':''}},
     }}
     # YAML tags reset inherited ports/dependencies/volumes without changing production Compose.
@@ -60,6 +85,8 @@ def main():
                 text+=f'    {key}: {tag}{json.dumps(value)}\n'
         path.write_text(text)
         cmd=base+['-f',str(path)]
+        degraded_path=Path(td)/'unavailable.yaml'
+        degraded_path.write_text('services:\n  business-mcp-1:\n    command: ["sleep", "600"]\n')
         def compose(*a): return run(cmd+list(a),timeout=120)
         def cid(service): return compose('ps','-aq',service)
         def inspect(service): return json.loads(run(['docker','inspect',cid(service)]))[0]
@@ -90,19 +117,39 @@ asyncio.run(main())"""
         try:
             compose('config','--quiet')
             resolved=json.loads(compose('config','--format','json'))
-            for service in ('backend','agent','business-mcp-1','business-mcp-2','business-mcp'):
+            for service in ('backend','agent','rag-mcp','business-mcp-1','business-mcp-2','business-mcp'):
                 assert not any(v['type']=='volume' for v in resolved['services'][service].get('volumes',[]))
             report['results']['static']='PASS'
-            compose('up','-d','--no-deps','--no-build','backend','business-mcp-1','business-mcp-2','business-mcp','agent')
+            # Cold start through the production dependency chain; no --no-deps.
+            run(cmd+['-f',str(degraded_path),'up','-d','--no-build','agent'],timeout=120)
+            healthy('business-mcp-2')
+            healthy('business-mcp')
+            assert inspect('business-mcp-1')['State']['Running']
+            assert inspect('business-mcp-1')['State'].get('Health',{}).get('Status') != 'healthy'
+            report['results']['cold_start_with_dependencies']=distribution([ip('business-mcp-2')])
+            compose('up','-d','--no-build','agent')
             for service in ('business-mcp-1','business-mcp-2','business-mcp'):healthy(service)
             ids=[inspect(s)['Image'] for s in ('business-mcp-1','business-mcp-2')];assert ids[0]==ids[1]
             report['image_id']=ids[0]
             report['results']['distribution']=distribution([ip('business-mcp-1'),ip('business-mcp-2')])
+            # Check the real unless-stopped policy before disabling restart for sustained outage.
+            prior=inspect('business-mcp-1')['RestartCount']
+            assert inspect('business-mcp-1')['HostConfig']['RestartPolicy']['Name']=='unless-stopped'
+            execute('business-mcp-1', 'import os,signal; os.kill(1,signal.SIGTERM)')
+            deadline=time.monotonic()+40
+            while inspect('business-mcp-1')['RestartCount'] <= prior:
+                if time.monotonic() >= deadline:
+                    raise RuntimeError('Automatic MCP restart timed out')
+                time.sleep(.2)
+            healthy('business-mcp-1')
+            time.sleep(3)
+            report['results']['automatic_restart']=distribution([ip('business-mcp-1'),ip('business-mcp-2')])
+            run(['docker','update','--restart=no',cid('business-mcp-1')])
             original_ip=ip('business-mcp-1')
             compose('kill','-s','SIGKILL','business-mcp-1');time.sleep(4)
             report['results']['single_failure']=distribution([ip('business-mcp-2')])
             compose('up','-d','--no-deps','--no-build','--force-recreate','business-mcp','agent');healthy('business-mcp')
-            report['results']['degraded_start']=distribution([ip('business-mcp-2')])
+            report['results']['degraded_recreate_no_deps']=distribution([ip('business-mcp-2')])
             compose('rm','-f','business-mcp-1')
             # Hold the released address so recreation must exercise a new DNS address.
             network=project+'_default'
@@ -142,14 +189,25 @@ asyncio.run(main())"""
             report['failure']='FAIL: acceptance interrupted; see failed assertion without secret output'
             raise
         finally:
-            compose('down','--remove-orphans')
-            after=mounts(set(args.preserve_project))
-            preserved=all(after.get(k)==v for k,v in before.items())
-            report['results']['existing_mounts']='PASS' if preserved else 'FAIL'
-            report['preserved_mounts']=[v for v in before.values()]
+            # Always write evidence even if cleanup or preservation checks fail.
+            final_error = None
+            try:
+                compose('down','--remove-orphans')
+                report['cleanup']='PASS'
+            except Exception as error:
+                report['cleanup']='FAIL'
+                final_error=error
+            try:
+                report['preservation']=preservation(before,mounts(set(args.preserve_project)))
+                if report['preservation']['status']=='FAIL':
+                    raise RuntimeError('Existing mounts changed')
+            except Exception as error:
+                report['preservation']={'status':'FAIL'}
+                final_error=final_error or error
             report['preserved_projects']=args.preserve_project
             args.output.parent.mkdir(parents=True,exist_ok=True)
             args.output.write_text(json.dumps(report,indent=2)+'\n')
-            assert preserved, 'Existing mounts changed'
+            if final_error is not None and 'failure' not in report:
+                raise final_error
     print(json.dumps(report,indent=2))
 if __name__=='__main__':main()

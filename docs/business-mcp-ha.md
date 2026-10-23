@@ -8,8 +8,6 @@
 
 2026-10-23 원격 Infra main `abf54b11998ad1abbc05022ab190c348328eff8f`,
 Agent main `764eab26a8272d72fc79bcad5b6e7aa82ef8d8b0` 기준이다.
-기존 로컬 Infra는 `feat/frontend-integration`, `d2d350d`에 미커밋 compose 변경이 있어
-별도 clone에서 구현했다. 기존 checkout, 실제 `.env`, 실행 프로젝트는 변경하지 않았다.
 참고 Agent Compose의 두 upstream `service_healthy` 의존성을 그대로 복사하지 않았다.
 LB는 `service_started`만 요구하며 한 upstream 프로세스가 준비되지 않아도 시작한다.
 컨테이너 자체를 생성할 수 없는 이미지/엔진 오류는 일반적인 Compose 시작 실패이며,
@@ -40,7 +38,7 @@ HAProxy 요청별 roundrobin, retries 0; 실패 요청의 자동 재전송은 �
 - `BUSINESS_MCP_IMAGE`는 필수. `pull_policy: never`로 사전에 빌드/반입한 동일 이미지를 사용한다.
   registry 배포는 digest 지정 후 명시적으로 pull하고 시작한다.
 - `AGENT_BUILD_CONTEXT`는 위 커밋의 Agent checkout 경로. 기존 오래된 checkout을
-  버전 이름만 바꿔 빌드하지 않는다. Agent 제한값을 적용하려면 Agent 이미지도 해당 구현 필요.
+  버전 이름만 바꿔 빌드하지 않는다. 아래 정적 검증은 커밋 불일치나 tracked/untracked 변경이 있으면 중단한다. Agent 제한값을 적용하려면 Agent 이미지도 해당 구현 필요.
 - `BACKEND_BUILD_CONTEXT`, `FRONTEND_BUILD_CONTEXT` 기본 형제 저장소 경로 유지.
 - 인증: 기존 `INTERNAL_SERVICE_TOKEN`, `BUSINESS_MCP_AGENT_TOKEN` 유지. 임의 재발급 금지.
 - MCP 요청/pool 16, Backend timeout 10초, MCP shutdown 20초, Compose grace 30초.
@@ -71,15 +69,51 @@ prefix를 사용한다. 테스트는 어느 기존 named volume도 마운트하�
 `abf54b11998ad1abbc05022ab190c348328eff8f`이다. 실제 이전 실행 이미지가 이 소스와
 같다는 보장이 없으므로 추측한 이전 버전 대신 직접 확인한 ID를 보관한다.
 
+별도 깨끗한 Agent checkout을 준비한다. 기존 팀원의 checkout을 reset하지 않는다.
+
 ```bash
+git clone https://github.com/skalaP05-03-261019/liveguard-agent.git /new/path/liveguard-agent-ha
+git -C /new/path/liveguard-agent-ha checkout --detach 764eab26a8272d72fc79bcad5b6e7aa82ef8d8b0
+export AGENT_BUILD_CONTEXT=/new/path/liveguard-agent-ha
+```
+
+아래 전환 절차는 기존 Backend/DB가 실행 중인 환경을 전제로 한다.
+실제 존재하는 조회용 case ID를 `MCP_VERIFY_CASE_ID` 환경변수에 설정한다.
+값이나 응답 본문을 출력하지 않는다. `set -e`로 검증 실패 시 기존 MCP 교체 전에 중단한다.
+두 신규 MCP를 모두 검증하는 것은 계획된 전환의 안전 조건이며,
+LB 자체의 한 대 장애 허용 시작 조건과는 별개다.
+
+```bash
+set -eu
+: "${MCP_VERIFY_CASE_ID:?Set an existing read-only verification case ID}"
 docker inspect EXISTING_MCP EXISTING_AGENT --format '{{.Name}} {{.Image}}'
 docker image tag ACTUAL_OLD_MCP_IMAGE_ID liveguard-business-mcp:pre-ha
 docker image tag ACTUAL_OLD_AGENT_IMAGE_ID liveguard-agent:pre-ha
-git -C "$AGENT_BUILD_CONTEXT" rev-parse HEAD
+python3 scripts/verify-business-mcp-config.py --env-file .env \
+  --project "$PROJECT" --output /tmp/business-mcp-predeploy.json
 docker compose -p "$PROJECT" config --quiet
 docker compose -p "$PROJECT" build business-mcp-1
 # MCP 두 번째 build 없이 같은 이미지 재사용
-docker compose -p "$PROJECT" up -d --no-deps --no-build business-mcp-1 business-mcp-2
+docker compose -p "$PROJECT" up -d --no-deps --no-build --wait --wait-timeout 60 \
+  business-mcp-1 business-mcp-2
+# 기존 business-mcp를 교체하기 전에 각 신규 MCP를 통한 실제 인증 조회 검증.
+for MCP_SERVICE in business-mcp-1 business-mcp-2; do
+  docker compose -p "$PROJECT" exec -T -e MCP_VERIFY_CASE_ID "$MCP_SERVICE" python - <<'PYCODE'
+import asyncio, os
+from uuid import UUID, uuid4
+from app.clients.business_mcp import BusinessMcpReadClient, BusinessMcpSettings
+async def verify():
+    client = BusinessMcpReadClient(BusinessMcpSettings(
+        'http://127.0.0.1:8002/mcp', os.environ['BUSINESS_MCP_AGENT_TOKEN']))
+    await client.call('get_moderation_case', {
+        'caseId': str(UUID(os.environ['MCP_VERIFY_CASE_ID'])), 'traceId': str(uuid4())})
+try:
+    asyncio.run(verify())
+except Exception:
+    raise SystemExit('MCP authenticated read failed; cutover aborted') from None
+print('PASS: authenticated read; body withheld')
+PYCODE
+done
 docker compose -p "$PROJECT" run --rm --no-deps business-mcp \
   haproxy -c -f /usr/local/etc/haproxy/haproxy.cfg
 docker compose -p "$PROJECT" up -d --no-deps --no-build business-mcp
@@ -107,14 +141,16 @@ MCP와 LB는 호스트 포트를 추가하지 않는다. MCP Python urllib healt
 검사하고 LB BusyBox wget은 최소 하나의 정상 MCP로 실제 HTTP 전달이 되는지 검사한다.
 두 MCP 모두 불가하면 LB 프로세스는 유지되며 503, container health는 unhealthy다.
 `depends_on`은 초기 순서만 관리한다. 실행 중 제외/복귀는 HAProxy 1초, fall 2/rise 2
-probe가 담당한다. Docker DNS 127.0.0.11:53, resolve retry 1초, hold valid 5초로
-IP 변경을 반영한다. 탐지 전/진행 중 요청 실패는 가능하며 실패를 성공으로 세지 않는다.
+probe가 담당한다. Docker DNS 127.0.0.11:53 resolver로 IP 변경을 반영한다.
+`hold valid 5s`를 서버 IP 갱신의 5초 SLA로 해석하지 않는다. 탐지 전/진행 중 요청 실패는 가능하며 실패를 성공으로 세지 않는다.
 
 `/ready`는 프로세스 준비/drain만 나타내고 Backend 인증/통신 성공을 보장하지 않는다.
 Backend 검증은 별도 인증된 MCP 도구 조회가 필요하다. 재현 시 응답 본문은 출력하지 않는다.
 SIGTERM은 Agent의 기존 DrainingServer가 drain 표시 후 요청 완료를 기다린다.
 실제 종료 시 listener도 빨리 닫혀 `/ready` 503을 외부에서 포착하지 못할 수 있다.
 503 상태 전환은 application 테스트, 실제 진행 요청 완료는 Docker 테스트로 구분했다.
+종료 유예 20초가 모든 요청의 성공을 보장하지 않는다. Agent 전체 deadline 10초가 먼저
+만료될 수 있다. `unless-stopped`는 프로세스 종료 시 재시작하며 unhealthy만으로 재시작하지 않는다.
 
 장애 분석은 container health/exit 상태, HAProxy 서버 UP/DOWN 이벤트, 안전한 오류 코드로
 진행한다. HAProxy HTTP 요청 로그 및 Uvicorn access log는 비활성화한다. SDK/HTTP body
@@ -139,16 +175,20 @@ DEBUG 로깅을 켜지 않으며 토큰, 도구 인자, 원문 채팅, 응답 bo
 export BUSINESS_MCP_IMAGE=liveguard-business-mcp:764eab26a827
 export AGENT_BUILD_CONTEXT=/absolute/path/to/verified/liveguard-agent
 python3 scripts/verify-business-mcp.py --env-file /absolute/path/to/existing/.env \
-  --preserve-project liveguard-final-review --preserve-project liveguard-main-review \
+  --preserve-project liveguard-infra --preserve-project liveguard-final-review --preserve-project liveguard-main-review \
   --preserve-project liveguard-v1-review --output evidence/business-mcp-ha.json
 ```
 
-Python 표준 라이브러리와 Docker Compose의 `!reset`/`!override` 지원이 필요하다.
+Python 표준 라이브러리와 Docker Compose 2.24.4 이상(`!override` 지원)이 필요하다.
+`--preserve-project`는 실제 존재하는 프로젝트만 반복 지정한다. 누락된 프로젝트는 실패하고,
+옵션을 생략하면 mount 보존은 NOT RUN으로 기록한다. 비교는 mount 구성 확인이며 데이터 checksum 검사는 아니다.
 Fixture는 실제 인증값을 안전한 env-file에서 읽되 출력하지 않고, 가상 조회 데이터와
 source IP만 반환한다. 기존 Infra Compose에 임시 override를 적용한다. Backend만 fixture로
-대체, Agent API는 그대로 시작하되 gateway 미설정으로 업무 worker는 실행하지 않는다.
+대체하고 무관한 RAG만 대기 프로세스로 격리한다. Agent→LB→MCP 및 MCP→Backend
+의존성은 유지한 채 한 MCP를 unavailable로 만든 초기 시작을 검증한다. Agent API는
+그대로 시작하되 gateway 미설정으로 업무 worker는 실행하지 않는다.
 Agent 저장 경로는 컨테이너 `/tmp`이며 기존 SQLite나 checkpoint에 접근하지 않는다.
-따라서 degraded-start 결과는 Agent API 기동 및 Agent SDK 조회 성공이며 업무 runtime
+따라서 cold-start 및 degraded 재생성 결과는 Agent API 기동 및 Agent SDK 조회 성공이며 업무 runtime
 전체 readiness나 실제 작업 처리 검증은 아니다. 기존 readiness 검증 조건은 완화하지 않는다.
 
 임시 프로젝트만 `down --remove-orphans`로 정리하며 `down -v`, prune은 사용하지 않는다.
@@ -158,8 +198,9 @@ Agent 저장 경로는 컨테이너 `/tmp`이며 기존 SQLite나 checkpoint에 
 
 ## 관측 결과와 남은 인수
 
-실제 결과: `evidence/business-mcp-ha.json`, `business-mcp-static.json`,
-`business-mcp-spring.json`. 소스/명령/관측 한계는 `business-mcp-validation.md` 참조.
+실제 Docker·정적 검증 결과는 `evidence/business-mcp-ha.json` 하나로 기록한다.
+과거 Spring 조회 결과, 소스/명령/관측 한계는 `business-mcp-validation.md` 참조.
+GitHub Actions는 `--portable` 정적 검증만 수행하며 로컬 빌드 소스 확인과 Docker 장애 시험을 대신하지 않는다.
 
 실제 Spring Backend의 UNKNOWN 복구/중복 변경 효과는 **BE·Agent 공동 인수**다.
 응답 유실 후 UNKNOWN → 원래 actionId 조회 → APPLIED 확인 시 재집행 금지,
