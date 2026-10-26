@@ -28,7 +28,7 @@ def main():
           '--project-directory',str(ROOT),'-p',args.project]
     new=json.loads(run(base+['-f',str(ROOT/'compose.yaml'),'config','--format','json']))
     unchanged=['db','backend','rag-mcp','rabbitmq','frontend']
-    changes=['BUSINESS_MCP_CLIENT_CONCURRENCY','BUSINESS_MCP_CALL_TIMEOUT']
+    changes=['BUSINESS_MCP_CLIENT_CONCURRENCY','BUSINESS_MCP_CALL_TIMEOUT','MODEL_MAX_INPUT_TOKENS']
     if not args.portable:
         with tempfile.NamedTemporaryFile(mode='w',suffix='.yaml') as f:
             f.write(run(['git','-C',str(ROOT),'show',args.baseline+':compose.yaml']));f.flush()

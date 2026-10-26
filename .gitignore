@@ -5,3 +5,5 @@
 # Earlier local attempts; authoritative final run is tracked separately.
 evidence/v1-browser/
 verification/node_modules/
+.deploy/
+__pycache__/

@@ -32,9 +32,7 @@ jobs:
           python3 - <<'PY'
           import ast, runpy
           from pathlib import Path
-          for path in (Path('scripts/verify-business-mcp.py'),
-                       Path('scripts/verify-business-mcp-config.py'),
-                       Path('scripts/fixtures/mcp_backend.py')):
+          for path in Path('scripts').rglob('*.py'):
               ast.parse(path.read_text(), filename=str(path))
           check = runpy.run_path('scripts/verify-business-mcp.py')['preservation']
           assert check({}, {})['status'] == 'NOT RUN'
@@ -42,4 +40,5 @@ jobs:
           assert check(before, before)['status'] == 'PASS'
           assert check(before, {})['status'] == 'FAIL'
           PY
+          python3 -m unittest discover -s scripts -p 'test_*.py' -v
           git diff --check "${{ github.event.pull_request.base.sha || github.event.before }}" HEAD

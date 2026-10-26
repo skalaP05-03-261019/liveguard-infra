@@ -12,6 +12,25 @@ Docker Compose를 통해 PostgreSQL, Spring Boot Backend, FastAPI Agent, Busines
 
 > Business MCP 배포 전 [이중화 운영 절차](docs/business-mcp-ha.md)의 소스 검증·사전 빌드·전환 검증을 먼저 확인하세요. 아래 이전 통합 실행 기록만으로 HA 배포를 진행하지 마세요.
 
+## 최신 main 배포와 헬스체크
+
+새 배포는 [main 배포 절차](docs/deploy-main.md)를 사용합니다. BE·Agent·FE의
+원격 main을 별도 checkout에 동기화하므로 개발 중인 형제 저장소의 브랜치·변경사항을
+건드리지 않습니다. 이미지·커밋을 기록하고 업무 readiness 실패 시 실패로 종료합니다.
+
+```bash
+python3 scripts/deploy-main.py --sync-only
+python3 scripts/deploy-main.py --env-file .env --rabbit
+python3 scripts/deploy-main.py --env-file .env --check-only
+```
+
+`MODEL_MAX_INPUT_TOKENS=20000`은 배포 env와 Compose 기본값에 반영되어 있습니다.
+배포 시 v3.2 정책 색인을 한 번 실행하고 기존 v3.1 색인은 보존합니다
+(새 DB는 v3.1도 한 번 생성). OpenAI 임베딩 비용이 발생하며 두 버전의 health를 확인합니다.
+청중 `p001`~`p200`은 **로컬 시연 DB에서만** `--seed-demo-participants`로
+명시적으로 추가합니다. 비밀번호는 `viewer` 해시를 복사하며 기본 시드에서는
+`liveguard-local`입니다(`liveguard`가 아님).
+
 ## 1. 시스템 구성
 
 | 서비스       | 기술                     | 역할                                        | 로컬 포트 |
