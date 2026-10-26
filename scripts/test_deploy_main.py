@@ -85,6 +85,9 @@ class DeploymentTests(unittest.TestCase):
             self.assertEqual(deploy.index_policies(["compose"], {}), ["v3.2"])
         commands = [call.args[0] for call in runner.call_args_list]
         self.assertEqual(len(commands), 2)
+        for command in commands:
+            self.assertNotIn("--no-build", command)
+            self.assertEqual(command[command.index("--pull") + 1], "never")
         self.assertEqual(commands[-1][-3:], ["python", "-m", "app.rag_mcp.index"])
         self.assertIn("LIVEGUARD_POLICY_VERSION=v3.2", commands[-1])
         self.assertIn("POLICY_VERSION=v3.2", commands[-1])

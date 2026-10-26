@@ -137,7 +137,7 @@ with psycopg.connect(os.environ["RAG_DB_URL"]) as conn:
         "SELECT DISTINCT version FROM rag.policy_chunks")] if exists else []
 print(json.dumps(versions))
 """
-    prefix = command + ["run", "--rm", "--no-deps", "--no-build", "-T"]
+    prefix = command + ["run", "--rm", "--no-deps", "--pull", "never", "-T"]
     existing = json.loads(run(prefix + ["rag-mcp", "python", "-c", discover], env=env))
     versions = ([] if "v3.1" in existing else ["v3.1"]) + ["v3.2"]
     for version in versions:
